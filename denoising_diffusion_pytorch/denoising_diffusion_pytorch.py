@@ -448,6 +448,19 @@ def linear_beta_schedule(timesteps):
     beta_end = scale * 0.02
     return torch.linspace(beta_start, beta_end, timesteps, dtype = torch.float64)
 
+def skibidi_beta_schedule(timesteps):
+    """
+    skibidi schedule, proposed in original ligigidi paper
+    """
+    scale = 1000 / timesteps
+    beta_start = scale * 0.0001
+    t = torch.arange(1, timesteps + 1, dtype=torch.float64)  # 1 to T
+    denom = 1 - beta_start * t
+    if torch.any(denom <= 0):
+      raise ValueError(f"k * timesteps must be less than 1 to avoid division by zero. Got k={k}, timesteps={timesteps}")
+    beta = beta_start / denom
+    return beta
+
 def cosine_beta_schedule(timesteps, s = 0.008):
     """
     cosine schedule
@@ -517,6 +530,8 @@ class GaussianDiffusion(Module):
             beta_schedule_fn = cosine_beta_schedule
         elif beta_schedule == 'sigmoid':
             beta_schedule_fn = sigmoid_beta_schedule
+        elif beta_schedule == 'skibidi':
+            beta_schedule_fn = skibidi_beta_schedule
         else:
             raise ValueError(f'unknown beta schedule {beta_schedule}')
 
@@ -671,10 +686,18 @@ class GaussianDiffusion(Module):
         return model_mean, posterior_variance, posterior_log_variance, x_start
 
     @torch.inference_mode()
-    def p_sample(self, x, t: int, x_self_cond = None):
+    def p_sample(self, x, t: int, x_self_cond = None, skibidi = False):
         b, *_, device = *x.shape, self.device
         batched_times = torch.full((b,), t, device = device, dtype = torch.long)
-        model_mean, _, model_log_variance, x_start = self.p_mean_variance(x = x, t = batched_times, x_self_cond = x_self_cond, clip_denoised = True)
+        if not skibidi:
+          model_mean, _, model_log_variance, x_start = self.p_mean_variance(
+        x=x, t=batched_times, x_self_cond=x_self_cond, clip_denoised=True
+        )
+        else:
+        _, _, model_log_variance, model_mean = self.p_mean_variance(
+        x=x, t=batched_times, x_self_cond=x_self_cond, clip_denoised=True
+        )
+
         noise = torch.randn_like(x) if t > 0 else 0. # no noise if t == 0
         pred_img = model_mean + (0.5 * model_log_variance).exp() * noise
         return pred_img, x_start
@@ -773,17 +796,20 @@ class GaussianDiffusion(Module):
         return torch.from_numpy(assign).to(dist.device)
 
     @autocast('cuda', enabled = False)
-    def q_sample(self, x_start, t, noise = None):
+    def q_sample(self, x_start, t, noise = None, skibidi = False):
         noise = default(noise, lambda: torch.randn_like(x_start))
+        if skibidi == False: 
+          if self.immiscible:
+              assign = self.noise_assignment(x_start, noise)
+              noise = noise[assign]
 
-        if self.immiscible:
-            assign = self.noise_assignment(x_start, noise)
-            noise = noise[assign]
-
-        return (
-            extract(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start +
-            extract(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape) * noise
-        )
+          return (
+              extract(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start +
+              extract(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape) * noise
+          )
+        else:
+          return x_start+extract(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape) * noise
+        
 
     def p_losses(self, x_start, t, noise = None, offset_noise_strength = None):
         b, c, h, w = x_start.shape
@@ -1104,3 +1130,4 @@ class Trainer:
                 pbar.update(1)
 
         accelerator.print('training complete')
+
