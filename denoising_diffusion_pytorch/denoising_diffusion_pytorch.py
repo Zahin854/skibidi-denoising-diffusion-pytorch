@@ -694,7 +694,7 @@ class GaussianDiffusion(Module):
         x=x, t=batched_times, x_self_cond=x_self_cond, clip_denoised=True
         )
         else:
-        _, _, model_log_variance, model_mean = self.p_mean_variance(
+            _, _, model_log_variance, model_mean = self.p_mean_variance(
         x=x, t=batched_times, x_self_cond=x_self_cond, clip_denoised=True
         )
 
