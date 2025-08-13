@@ -687,7 +687,7 @@ class GaussianDiffusion(Module):
         return model_mean, posterior_variance, posterior_log_variance, x_start
 
     @torch.inference_mode()
-    def p_sample(self, x, t: int, x_self_cond = None, skibidi = self.skib):
+    def p_sample(self, x, t: int, x_self_cond = None, skibidi = GaussianDiffusion.skib):
         b, *_, device = *x.shape, self.device
         batched_times = torch.full((b,), t, device = device, dtype = torch.long)
         if not skibidi:
@@ -797,7 +797,7 @@ class GaussianDiffusion(Module):
         return torch.from_numpy(assign).to(dist.device)
 
     @autocast('cuda', enabled = False)
-    def q_sample(self, x_start, t, noise = None, skibidi = self.skib):
+    def q_sample(self, x_start, t, noise = None, skibidi = GaussianDiffusion.skib):
         noise = default(noise, lambda: torch.randn_like(x_start))
         if skibidi == False: 
           if self.immiscible:
