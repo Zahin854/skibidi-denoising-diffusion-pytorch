@@ -692,11 +692,15 @@ class GaussianDiffusion(Module):
         b, *_, device = *x.shape, self.device
         batched_times = torch.full((b,), t, device = device, dtype = torch.long)
         model_mean, _, model_log_variance, x_start = self.p_mean_variance(
-        x=x, t=batched_times, x_self_cond=x_self_cond, clip_denoised=True)
-        if skibidi:
-            model_mean = torch.zeros_like(x)
-        else:
-            pass
+    x=x, t=batched_times, x_self_cond=x_self_cond, clip_denoised=True
+)
+
+        if self.skib:  # “no directional bias”
+            # center x_start per sample
+            rd = tuple(range(1, x_start.ndim))
+            x_start = x_start - x_start.mean(dim=rd, keepdim=True)
+            # recompute posterior using centered x_start
+            model_mean, _, model_log_variance = self.q_posterior(x_start=x_start, x_t=x, t=batched_times)
 
         noise = torch.randn_like(x) if t > 0 else 0. # no noise if t == 0
         pred_img = model_mean + (0.5 * model_log_variance).exp() * noise
@@ -796,19 +800,16 @@ class GaussianDiffusion(Module):
 
     @autocast('cuda', enabled = False)
     def q_sample(self, x_start, t, noise = None, skibidi = None):
-        skibidi = self.skib
         noise = default(noise, lambda: torch.randn_like(x_start))
-        if skibidi == False: 
-          if self.immiscible:
+        if self.immiscible:
               assign = self.noise_assignment(x_start, noise)
               noise = noise[assign]
-
-          return (
+    
+        return (
               extract(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start +
               extract(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape) * noise
           )
-        else:
-          return x_start+extract(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape) * noise
+       
         
 
     def p_losses(self, x_start, t, noise = None, offset_noise_strength = None):
