@@ -694,14 +694,13 @@ class GaussianDiffusion(Module):
         model_mean, _, model_log_variance, x_start = self.p_mean_variance(
         x=x, t=batched_times, x_self_cond=x_self_cond, clip_denoised=True)
         if skibidi:
-           model_mean =0
+            model_mean = torch.zeros_like(x)
         else:
-           model_mean, _, model_log_variance, x_start = self.p_mean_variance(
-        x=x, t=batched_times, x_self_cond=x_self_cond, clip_denoised=True)
+            pass
+
         noise = torch.randn_like(x) if t > 0 else 0. # no noise if t == 0
         pred_img = model_mean + (0.5 * model_log_variance).exp() * noise
         return pred_img, x_start
-
     @torch.inference_mode()
     def p_sample_loop(self, shape, return_all_timesteps = False):
         batch, device = shape[0], self.device
