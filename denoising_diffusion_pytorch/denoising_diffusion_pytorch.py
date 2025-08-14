@@ -699,7 +699,11 @@ class GaussianDiffusion(Module):
             _, _, model_log_variance, model_mean = self.p_mean_variance(
         x=x, t=batched_times, x_self_cond=x_self_cond, clip_denoised=True
         )
-
+             _, _,_, x_start = self.p_mean_variance(
+        x=x, t=batched_times, x_self_cond=x_self_cond, clip_denoised=True
+        )
+            
+        
         noise = torch.randn_like(x) if t > 0 else 0. # no noise if t == 0
         pred_img = model_mean + (0.5 * model_log_variance).exp() * noise
         return pred_img, x_start
